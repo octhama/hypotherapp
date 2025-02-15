@@ -1,27 +1,23 @@
-# Étape 1 : Utilisation de l'image officielle PHP avec les extensions nécessaires
+# Utiliser une image PHP avec les extensions nécessaires
 FROM php:8.2-fpm
 
-# Installation des dépendances système
+# Installer les dépendances système
 RUN apt-get update && apt-get install -y \
-    curl \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    zip \
-    unzip \
-    git \
+    nginx \
     sqlite3 \
     libsqlite3-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install gd pdo pdo_mysql pdo_sqlite
+    unzip \
+    git \
+    curl \
+    && docker-php-ext-install pdo pdo_sqlite
 
-# Installation de Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Installer Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Définition du répertoire de travail
+# Définir le répertoire de travail
 WORKDIR /var/www
 
-# Copie des fichiers du projet Laravel
+# Copier les fichiers de l'application Laravel
 COPY . .
 
 # Création des dossiers nécessaires
@@ -30,18 +26,17 @@ RUN mkdir -p /var/www/storage /var/www/bootstrap/cache
 # Attribution des permissions correctes
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
-# Installation des dépendances PHP de Laravel
+# Installer les dépendances Laravel
 RUN composer install --no-dev --optimize-autoloader
 
-# Configuration des permissions pour le dossier SQLite
-RUN touch /var/www/database/database.sqlite && \
-    chown -R www-data:www-data /var/www/database
+# Changer les permissions
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
-# Copie du fichier de configuration Nginx
-COPY docker/nginx/default.conf /etc/nginx/sites-available/default
+# Copier la configuration Nginx
+COPY docker/nginx.conf /etc/nginx/sites-available/default
 
-# Exposition des ports pour le service
+# Exposer les ports pour Nginx et PHP-FPM
 EXPOSE 80
 
-# Commande pour démarrer le serveur PHP et Nginx
-CMD ["sh", "-c", "php-fpm & nginx -g 'daemon off;'"]
+# Lancer Nginx et PHP-FPM
+CMD service nginx start && php-fpm
