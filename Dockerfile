@@ -1,36 +1,47 @@
-# Utiliser une image PHP avec les extensions nécessaires
+# Étape 1 : Utilisation de l'image officielle PHP avec les extensions nécessaires
 FROM php:8.2-fpm
 
-# Installer les dépendances système
+# Installation des dépendances système
 RUN apt-get update && apt-get install -y \
-    nginx \
-    sqlite3 \
-    libsqlite3-dev \
+    curl \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    zip \
     unzip \
     git \
-    curl \
-    && docker-php-ext-install pdo pdo_sqlite
+    sqlite3 \
+    libsqlite3-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install gd pdo pdo_mysql pdo_sqlite
 
-# Installer Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+# Installation de Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Définir le répertoire de travail
+# Définition du répertoire de travail
 WORKDIR /var/www
 
-# Copier les fichiers de l'application Laravel
+# Copie des fichiers du projet Laravel
 COPY . .
 
-# Installer les dépendances Laravel
-RUN composer install --no-dev --optimize-autoloader
+# Création des dossiers nécessaires
+RUN mkdir -p /var/www/storage /var/www/bootstrap/cache
 
-# Changer les permissions
+# Attribution des permissions correctes
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
-# Copier la configuration Nginx
-COPY docker/nginx.conf /etc/nginx/sites-available/default
+# Installation des dépendances PHP de Laravel
+RUN composer install --no-dev --optimize-autoloader
 
-# Exposer les ports pour Nginx et PHP-FPM
+# Configuration des permissions pour le dossier SQLite
+RUN touch /var/www/database/database.sqlite && \
+    chown -R www-data:www-data /var/www/database
+
+# Copie du fichier de configuration Nginx
+COPY docker/nginx/default.conf /etc/nginx/sites-available/default
+
+# Exposition des ports pour le service
 EXPOSE 80
 
-# Lancer Nginx et PHP-FPM
-CMD service nginx start && php-fpm
+# Commande pour démarrer le serveur PHP et Nginx
+CMD ["sh", "-c", "php-fpm & nginx -g 'daemon off;'"]
